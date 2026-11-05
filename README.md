@@ -30,34 +30,48 @@ Garmin Connect ──(sync/sync.py, 매일 GitHub Actions)──▶ Supabase(Pos
 
 ## 설정
 
-### 1. Supabase
-1. 프로젝트 생성 → **SQL Editor**에서 `supabase/migrations/0001_init.sql` 실행
-2. **Authentication → Users → Add user**로 본인 계정(이메일/비밀번호) 생성, 사용자 UUID 복사
-3. (권장) Authentication → Sign In / Providers 에서 **신규 가입 비활성화** — 혼자 쓰는 앱이므로
+### 1. Supabase (운영자, 1회)
+1. 프로젝트 생성 → **SQL Editor**에서 `supabase/migrations/0001_init.sql` → `0002_friends.sql` → `0003_web_connect.sql` 순서로 실행
+2. Authentication → Sign In / Providers 에서 이메일 가입을 켭니다 (친구가 직접 가입). 메일 확인을 끄면 가입 즉시 로그인됩니다.
 
 ### 2. 환경변수
 ```bash
 cp .env.example .env.local   # 값 채우기
 ```
-`SUPABASE_SERVICE_ROLE_KEY`는 동기화 스크립트에서만 쓰며 절대 `NEXT_PUBLIC_`을 붙이지 마세요.
+`SUPABASE_SERVICE_ROLE_KEY`는 **운영자의 동기화 실행(GitHub Actions)에서만** 쓰며 절대 `NEXT_PUBLIC_`을 붙이거나 친구에게 주지 마세요.
 
-### 3. 가민 최초 로그인 (로컬, 1회)
+### 3. 가민 연결 (각 사용자, 웹에서)
+가입 후 앱의 **친구** 페이지 → "내 가민 연결"에 가민 이메일/비밀번호(+MFA 코드)를 입력하면 끝입니다.
+- 가민 비밀번호는 저장되지 않고 로그인에 한 번만 쓰입니다. 토큰만 본인 행에 저장됩니다(RLS로 본인/서비스 롤만 접근).
+- 연결 요청은 Vercel Python 함수(`api/garmin/*.py`)가 처리하며, **사용자 본인의 로그인 토큰**으로 DB 함수를 호출하므로 service role 키가 필요 없습니다.
+- 연결 후 첫 동기화는 매시 도는 Actions가 처리하고, 이후엔 매일 증분 동기화됩니다.
+- (대안) 터미널에서 `cd sync && python sync.py login` 으로도 연결할 수 있습니다. 가민이 클라우드 IP 로그인을 막는 경우에 쓰세요.
+
+### 배포 (Vercel)
+1. 저장소를 Vercel에 import (Framework: Next.js)
+2. 환경변수: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `APP_TIMEZONE` — **service role 키는 넣지 않습니다**
+3. Supabase → Authentication → URL Configuration 에 배포 주소를 Site URL / Redirect URL 로 추가
+4. `supabase/migrations/0003_web_connect.sql` 실행
+5. 로컬에서 가민 연결까지 시험하려면 `npm run dev` 대신 `npx vercel dev` (Python 함수 포함 실행)
+
+### 3-1. 동기화 (운영자)
+GitHub Actions가 매일 토큰이 저장된 **모든 사용자**를 동기화합니다. 수동 실행:
 ```bash
-cd sync
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python sync.py login     # MFA 코드 입력 → 토큰이 Supabase garmin_sync_state 에 저장됨
-python sync.py           # 최근 180일 백필
-python sync.py --since 2024-01-01   # 더 오래 전부터 가져오려면
+python sync.py                      # 전체 사용자
+python sync.py --user <uuid>        # 한 명만
+python sync.py --since 2024-01-01   # 더 오래 전부터
 ```
-로그인 이후엔 가민 비밀번호가 필요 없습니다. 토큰은 RLS로 브라우저에서 접근 불가한 테이블에 저장되며, 갱신될 때마다 다시 저장됩니다.
+Actions Secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+
+### 3-2. 친구
+앱의 **친구** 페이지에서 내 초대 코드를 확인하고, 친구의 코드를 입력해 신청합니다. 수락하면 서로의 대시보드를 읽기 전용으로 볼 수 있습니다.
 
 ### 4. 대시보드 실행
 ```bash
 npm install
 npm run dev
 ```
-http://localhost:3000 → 2번에서 만든 계정으로 로그인.
+http://localhost:3000 → 가입 후 로그인.
 
 ### 5. 자동 동기화 (GitHub Actions)
 레포 **Settings → Secrets and variables → Actions**에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_USER_ID` 등록.

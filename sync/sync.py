@@ -4,15 +4,19 @@
 가져와 Supabase에 upsert 합니다. 개인 용도로만 사용하세요.
 
 사용법:
-  python sync.py login            # 최초 1회: 가민 로그인(MFA 지원) 후 토큰을 Supabase에 저장
-  python sync.py                  # 마지막 동기화 이후(3일 겹침)부터 오늘까지 동기화
-  python sync.py --since 2025-01-01   # 특정 날짜부터 백필
+  python sync.py login            # 각 사용자 최초 1회: 앱 계정 + 가민 로그인(MFA 지원) 후 토큰 저장
+                                  #   (service role 키 불필요 — 본인 앱 로그인 세션으로 본인 행만 씀)
+  python sync.py                  # [운영자] 토큰이 저장된 모든 사용자를 동기화 (service role 필요)
+  python sync.py --user <uuid>    # [운영자] 특정 사용자만
+  python sync.py --new-only       # [운영자] 아직 한 번도 동기화되지 않은(방금 연결한) 사용자만
+  python sync.py --since 2025-01-01   # [운영자] 특정 날짜부터 백필
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import getpass
 import os
 import sys
 import time
@@ -24,6 +28,7 @@ from garminconnect import Garmin
 from supabase import Client, create_client
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env.local")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
 DEFAULT_BACKFILL_DAYS = 180
@@ -34,7 +39,7 @@ REQUEST_PAUSE_S = 0.4
 def env(name: str, required: bool = True) -> str | None:
     value = os.getenv(name)
     if required and not value:
-        sys.exit(f"환경변수 {name} 가 필요합니다 (.env.local 또는 sync/.env)")
+        sys.exit(f"환경변수 {name} 가 필요합니다 (.env, .env.local 또는 sync/.env)")
     return value
 
 
@@ -75,7 +80,7 @@ def as_int(v: Any) -> int | None:
 # ---------------------------------------------------------------- Supabase
 
 def supabase() -> Client:
-    return create_client(env("SUPABASE_URL") or env("NEXT_PUBLIC_SUPABASE_URL"),
+    return create_client(env("SUPABASE_URL", required=False) or env("NEXT_PUBLIC_SUPABASE_URL"),
                          env("SUPABASE_SERVICE_ROLE_KEY"))
 
 
@@ -96,14 +101,37 @@ def garmin_from_tokens(tokens: str) -> Garmin:
     return g
 
 
-def interactive_login(sb: Client, user_id: str) -> None:
-    email = env("GARMIN_EMAIL")
-    password = env("GARMIN_PASSWORD")
-    g = Garmin(email, password, prompt_mfa=lambda: input("가민 MFA 코드: ").strip())
+def ask(name: str, prompt: str, secret: bool = False) -> str:
+    value = os.getenv(name)
+    if value:
+        return value
+    value = (getpass.getpass if secret else input)(prompt).strip()
+    if not value:
+        sys.exit(f"{prompt.strip(' :')} 값이 필요합니다.")
+    return value
+
+
+def interactive_login() -> None:
+    """본인 앱 계정으로 로그인한 뒤 가민 토큰을 set_garmin_tokens RPC 로 저장.
+
+    service role 키를 쓰지 않으므로 친구에게 줘도 안전한 공개 키(URL + publishable/anon)만 필요.
+    """
+    url = env("SUPABASE_URL", required=False) or env("NEXT_PUBLIC_SUPABASE_URL")
+    key = env("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", required=False) or env("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+    app = create_client(url, key)
+
+    app_email = ask("APP_EMAIL", "앱 계정 이메일: ")
+    app_password = ask("APP_PASSWORD", "앱 계정 비밀번호: ", secret=True)
+    app.auth.sign_in_with_password({"email": app_email, "password": app_password})
+
+    g_email = ask("GARMIN_EMAIL", "가민 이메일: ")
+    g_password = ask("GARMIN_PASSWORD", "가민 비밀번호: ", secret=True)
+    g = Garmin(g_email, g_password, prompt_mfa=lambda: input("가민 MFA 코드: ").strip())
     g.login()
-    save_state(sb, user_id, tokens=g.client.dumps())
-    print("로그인 성공 — 토큰을 Supabase(garmin_sync_state)에 저장했습니다.")
-    print("이후에는 이메일/비밀번호 없이 `python sync.py` 만 실행하면 됩니다.")
+
+    app.rpc("set_garmin_tokens", {"p_tokens": g.client.dumps()}).execute()
+    print("로그인 성공 — 가민 토큰을 저장했습니다 (가민 비밀번호는 저장하지 않습니다).")
+    print("운영자의 자동 동기화가 돌면 대시보드에 데이터가 나타납니다.")
 
 
 # ---------------------------------------------------------------- 변환
@@ -175,7 +203,7 @@ def sync(sb: Client, user_id: str, since: dt.date | None) -> None:
     state = load_state(sb, user_id)
     tokens = state.get("tokens") or os.getenv("GARMINTOKENS")
     if not tokens:
-        sys.exit("저장된 가민 토큰이 없습니다. 먼저 `python sync.py login` 을 실행하세요.")
+        raise RuntimeError("저장된 가민 토큰이 없습니다. `python sync.py login` 을 먼저 실행하세요.")
 
     today = dt.date.today()
     if since is None:
@@ -224,14 +252,36 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("command", nargs="?", default="sync", choices=["sync", "login"])
     p.add_argument("--since", type=dt.date.fromisoformat, help="YYYY-MM-DD 부터 다시 가져오기")
+    p.add_argument("--user", help="이 사용자(UUID)만 동기화")
+    p.add_argument("--new-only", action="store_true", help="첫 동기화 전인 사용자만")
     args = p.parse_args()
 
-    sb = supabase()
-    user_id = env("SUPABASE_USER_ID")
     if args.command == "login":
-        interactive_login(sb, user_id)
-    else:
-        sync(sb, user_id, args.since)
+        interactive_login()
+        return
+
+    sb = supabase()
+    q = sb.table("garmin_sync_state").select("user_id").not_.is_("tokens", "null")
+    if args.user:
+        q = q.eq("user_id", args.user)
+    if args.new_only:
+        q = q.is_("last_synced_date", "null")
+    user_ids = [r["user_id"] for r in q.execute().data]
+    if not user_ids:
+        print("동기화할 사용자가 없습니다.")
+        return
+
+    failed = 0
+    for uid in user_ids:
+        print(f"== 사용자 {uid}")
+        try:
+            sync(sb, uid, args.since)
+        except Exception as e:  # sync() 가 이미 last_error 를 기록함. 다음 사용자 계속 진행
+            failed += 1
+            print(f"  ✗ 실패: {e}", file=sys.stderr)
+    print(f"\n완료: {len(user_ids) - failed}/{len(user_ids)} 성공")
+    if failed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

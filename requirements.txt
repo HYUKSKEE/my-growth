@@ -1,0 +1,3 @@
+# Vercel Python 함수(api/) 의존성. sync/requirements.txt 와 버전을 맞춰 둘 것.
+garminconnect==0.3.20
+supabase>=2.34,<3

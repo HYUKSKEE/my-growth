@@ -2,7 +2,8 @@ name: Garmin sync
 
 on:
   schedule:
-    - cron: "17 21 * * *"   # 매일 06:17 KST
+    - cron: "17 21 * * *"   # 매일 06:17 KST — 전체 사용자 증분 동기화
+    - cron: "7 * * * *"     # 매시 — 방금 연결한 사용자의 첫 동기화만 (없으면 즉시 종료)
   workflow_dispatch:
     inputs:
       since:
@@ -25,5 +26,4 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_USER_ID: ${{ secrets.SUPABASE_USER_ID }}
-        run: python sync/sync.py ${{ inputs.since && format('--since {0}', inputs.since) || '' }}
+        run: python sync/sync.py ${{ inputs.since && format('--since {0}', inputs.since) || '' }} ${{ github.event.schedule == '7 * * * *' && '--new-only' || '' }}

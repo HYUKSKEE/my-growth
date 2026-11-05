@@ -17,9 +17,14 @@ export type DashboardProps = {
   rangeKey: RangeKey;
   email: string;
   sync: { last_run_at: string | null; last_error: string | null } | null;
+  people: { id: string; name: string }[];
+  viewingId: string;
+  isSelf: boolean;
 };
 
-export function DashboardView({ daily, acts, today, rangeKey, email, sync }: DashboardProps) {
+export function DashboardView({ daily, acts, today, rangeKey, email, sync, people, viewingId, isSelf }: DashboardProps) {
+  const viewing = people.find((p) => p.id === viewingId);
+  const q = (range: string) => `/?range=${range}${isSelf ? "" : `&user=${viewingId}`}`;
   const from = addDays(today, -RANGES[rangeKey] + 1);
   const fetchFrom = addDays(from, -120);
   const series = (k: keyof DailyRow) => daily.map((d) => ({ date: d.date, value: d[k] as number | null }));
@@ -44,9 +49,9 @@ export function DashboardView({ daily, acts, today, rangeKey, email, sync }: Das
     <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">나의 성장 지표</h1>
+          <h1 className="text-2xl font-semibold">{isSelf ? "나의 성장 지표" : `${viewing?.name}님의 성장 지표`}</h1>
           <p className="text-sm text-muted">
-            {email} · 마지막 동기화{" "}
+            {isSelf ? email : "친구 대시보드 (읽기 전용)"} · 마지막 동기화{" "}
             {sync?.last_run_at ? new Date(sync.last_run_at).toLocaleString("ko-KR") : "없음"}
             {sync?.last_error && <span className="text-critical"> · 오류: {sync.last_error}</span>}
           </p>
@@ -54,21 +59,39 @@ export function DashboardView({ daily, acts, today, rangeKey, email, sync }: Das
         <div className="flex items-center gap-2">
           <nav className="card flex p-1 text-sm" aria-label="기간">
             {(Object.keys(RANGES) as RangeKey[]).map((k) => (
-              <Link key={k} href={`/?range=${k}`}
+              <Link key={k} href={q(k)}
                 className={`rounded-md px-3 py-1 ${k === rangeKey ? "bg-background font-medium" : "text-secondary"}`}>
                 {k === "365" ? "1년" : `${Number(k) / 30}개월`}
               </Link>
             ))}
           </nav>
+          <Link href="/friends" className="text-sm text-secondary hover:underline">친구</Link>
           <form action={signOut}><button className="text-sm text-secondary hover:underline">로그아웃</button></form>
         </div>
       </header>
 
+      {people.length > 1 && (
+        <nav className="flex flex-wrap gap-2 text-sm" aria-label="사용자">
+          {people.map((p) => (
+            <Link key={p.id} href={`/?range=${rangeKey}${p.id === people[0].id ? "" : `&user=${p.id}`}`}
+              className={`card rounded-full px-3 py-1 ${p.id === viewingId ? "font-medium" : "text-secondary"}`}>
+              {p.id === people[0].id ? "나" : p.name}
+            </Link>
+          ))}
+        </nav>
+      )}
+
       {empty ? (
         <section className="card space-y-2 p-6 text-sm">
           <h2 className="text-base font-semibold">아직 데이터가 없습니다</h2>
-          <p className="text-secondary">동기화 스크립트를 실행해 가민 데이터를 가져오세요:</p>
-          <pre className="rounded-md bg-background p-3 font-mono text-xs">cd sync && python sync.py login && python sync.py</pre>
+          {isSelf ? (
+            <>
+              <p className="text-secondary">가민 계정을 연결하면 데이터가 자동으로 채워집니다.</p>
+              <Link href="/friends" className="btn inline-block">가민 연결하기</Link>
+            </>
+          ) : (
+            <p className="text-secondary">이 친구는 아직 가민을 연결하지 않았거나 첫 동기화 전입니다.</p>
+          )}
         </section>
       ) : (
         <>
