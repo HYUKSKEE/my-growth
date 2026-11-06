@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # api/ → _com
 from garminconnect import Garmin
 from garminconnect.exceptions import GarminConnectAuthenticationError
 
-from _common import ApiError, JsonHandler, user_client
+from _common import ApiError, JsonHandler, start_first_sync, user_client
 
 
 class handler(JsonHandler):
@@ -31,4 +31,4 @@ class handler(JsonHandler):
 
         sb.rpc("set_garmin_tokens", {"p_tokens": g.client.dumps()}).execute()
         sb.rpc("clear_mfa_state").execute()
-        return {"status": "ok"}
+        return {"status": "ok", "syncing": start_first_sync(sb)}

@@ -31,7 +31,7 @@ Garmin Connect ──(sync/sync.py, 매일 GitHub Actions)──▶ Supabase(Pos
 ## 설정
 
 ### 1. Supabase (운영자, 1회)
-1. 프로젝트 생성 → **SQL Editor**에서 `supabase/migrations/0001_init.sql` → `0002_friends.sql` → `0003_web_connect.sql` 순서로 실행
+1. 프로젝트 생성 → **SQL Editor**에서 `supabase/migrations/0001_init.sql` → `0002_friends.sql` → `0003_web_connect.sql` → `0004_first_sync_trigger.sql` 순서로 실행
 2. Authentication → Sign In / Providers 에서 이메일 가입을 켭니다 (친구가 직접 가입). 메일 확인을 끄면 가입 즉시 로그인됩니다.
 
 ### 2. 환경변수
@@ -44,14 +44,15 @@ cp .env.example .env.local   # 값 채우기
 가입 후 앱의 **친구** 페이지 → "내 가민 연결"에 가민 이메일/비밀번호(+MFA 코드)를 입력하면 끝입니다.
 - 가민 비밀번호는 저장되지 않고 로그인에 한 번만 쓰입니다. 토큰만 본인 행에 저장됩니다(RLS로 본인/서비스 롤만 접근).
 - 연결 요청은 Vercel Python 함수(`api/garmin/*.py`)가 처리하며, **사용자 본인의 로그인 토큰**으로 DB 함수를 호출하므로 service role 키가 필요 없습니다.
-- 연결 후 첫 동기화는 매시 도는 Actions가 처리하고, 이후엔 매일 증분 동기화됩니다.
+- 연결 직후 서버가 GitHub Actions를 **즉시 실행**해 첫 동기화를 시작합니다(보통 10분 안에 완료). 실패하거나 토큰이 없으면 매시 도는 Actions가 대신 처리하고, 이후엔 매일 증분 동기화됩니다.
 - (대안) 터미널에서 `cd sync && python sync.py login` 으로도 연결할 수 있습니다. 가민이 클라우드 IP 로그인을 막는 경우에 쓰세요.
 
 ### 배포 (Vercel)
 1. 저장소를 Vercel에 import (Framework: Next.js)
 2. 환경변수: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `APP_TIMEZONE` — **service role 키는 넣지 않습니다**
+   - (선택, 첫 동기화 즉시 실행) `GITHUB_DISPATCH_TOKEN`: 이 저장소 하나에 `Actions: Read and write` 권한만 준 fine-grained 토큰. `GITHUB_REPO`(기본 `HYUKSKEE/my-growth`), `GITHUB_REF_NAME`(기본 `main`)으로 대상을 바꿀 수 있습니다.
 3. Supabase → Authentication → URL Configuration 에 배포 주소를 Site URL / Redirect URL 로 추가
-4. `supabase/migrations/0003_web_connect.sql` 실행
+4. `supabase/migrations/0003_web_connect.sql`, `0004_first_sync_trigger.sql` 실행
 5. 로컬에서 가민 연결까지 시험하려면 `npm run dev` 대신 `npx vercel dev` (Python 함수 포함 실행)
 
 ### 3-1. 동기화 (운영자)

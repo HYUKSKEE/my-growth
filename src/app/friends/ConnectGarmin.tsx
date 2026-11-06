@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type Step = "form" | "mfa" | "done";
 
-async function call(path: string, body: object): Promise<{ status?: string; error?: string }> {
+async function call(path: string, body: object): Promise<{ status?: string; error?: string; syncing?: boolean }> {
   const { data } = await createClient().auth.getSession();
   if (!data.session) return { error: "로그인이 필요합니다. 다시 로그인하세요." };
   try {
@@ -26,20 +26,21 @@ export function ConnectGarmin() {
   const [step, setStep] = useState<Step>("form");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
-  async function run(path: string, body: object, onOk: (s: string) => void) {
+  async function run(path: string, body: object, onOk: (s: string, syncing: boolean) => void) {
     setPending(true);
     setError(null);
     const r = await call(path, body);
     setPending(false);
     if (r.error || !r.status) return setError(r.error ?? "알 수 없는 오류");
-    onOk(r.status);
+    onOk(r.status, r.syncing === true);
   }
 
-  const finish = () => { setStep("done"); router.refresh(); };
+  const finish = (started: boolean) => { setSyncing(started); setStep("done"); router.refresh(); };
 
   if (step === "done") {
-    return <p className="text-sm text-good-text">연결되었습니다! 첫 동기화가 끝나면(보통 1시간 이내) 데이터가 나타납니다.</p>;
+    return <p className="text-sm text-good-text">{syncing ? "연결되었습니다! 동기화를 시작했어요. 보통 10분 안에 데이터가 나타납니다." : "연결되었습니다! 첫 동기화가 끝나면(최대 1시간) 데이터가 나타납니다."}</p>;
   }
 
   return step === "form" ? (
@@ -47,10 +48,10 @@ export function ConnectGarmin() {
       e.preventDefault();
       const f = new FormData(e.currentTarget);
       const form = e.currentTarget;
-      run("/api/garmin/connect", { email: f.get("email"), password: f.get("password") }, (s) => {
+      run("/api/garmin/connect", { email: f.get("email"), password: f.get("password") }, (s, started) => {
         form.reset(); // 비밀번호를 화면에 남기지 않음
         if (s === "mfa") setStep("mfa");
-        else finish();
+        else finish(started);
       });
     }}>
       <input name="email" type="email" required placeholder="가민 이메일" autoComplete="off" className="input" />
@@ -63,7 +64,7 @@ export function ConnectGarmin() {
     <form className="space-y-2" onSubmit={(e) => {
       e.preventDefault();
       const f = new FormData(e.currentTarget);
-      run("/api/garmin/mfa", { code: f.get("code") }, finish);
+      run("/api/garmin/mfa", { code: f.get("code") }, (_s, started) => finish(started));
     }}>
       <p className="text-sm text-secondary">가민이 보낸 인증 코드를 입력하세요 (메일/문자/앱).</p>
       <input name="code" required inputMode="numeric" autoComplete="one-time-code" placeholder="MFA 코드" className="input font-mono" />

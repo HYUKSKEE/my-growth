@@ -9,6 +9,10 @@ on:
       since:
         description: "YYYY-MM-DD 부터 다시 가져오기 (비우면 증분)"
         required: false
+      new_only:
+        description: "첫 동기화 전인 사용자만 (연결 직후 앱이 자동으로 호출)"
+        type: boolean
+        default: false
 
 jobs:
   sync:
@@ -26,4 +30,4 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python sync/sync.py ${{ inputs.since && format('--since {0}', inputs.since) || '' }} ${{ github.event.schedule == '7 * * * *' && '--new-only' || '' }}
+        run: python sync/sync.py ${{ inputs.since && format('--since {0}', inputs.since) || '' }} ${{ (github.event.schedule == '7 * * * *' || inputs.new_only) && '--new-only' || '' }}

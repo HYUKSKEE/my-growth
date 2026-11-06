@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.request
 from http.server import BaseHTTPRequestHandler
 from typing import Any
 
@@ -68,3 +69,36 @@ class JsonHandler(BaseHTTPRequestHandler):
 
     def log_message(self, *args: Any) -> None:  # 요청 로그에 본문이 남지 않도록 비활성화
         pass
+
+
+def start_first_sync(sb: Client) -> bool:
+    """가민 연결 직후 첫 동기화를 GitHub Actions 로 즉시 실행한다.
+
+    - 호출 허용 여부는 DB 함수(request_first_sync)가 판단: 첫 동기화 전 + 10분에 1회만 true.
+    - 실패해도 연결 자체는 성공이므로 예외를 밖으로 내지 않는다 (매시 정각 예약 실행이 대신 처리).
+    - GITHUB_DISPATCH_TOKEN 은 이 저장소 하나의 Actions 실행 권한만 가진 토큰이어야 한다.
+    """
+    token = os.environ.get("GITHUB_DISPATCH_TOKEN")
+    if not token:
+        return False
+    try:
+        if not sb.rpc("request_first_sync").execute().data:
+            return False
+        repo = os.environ.get("GITHUB_REPO", "HYUKSKEE/my-growth")
+        api = os.environ.get("GITHUB_API_URL", "https://api.github.com")
+        req = urllib.request.Request(
+            f"{api}/repos/{repo}/actions/workflows/garmin-sync.yml/dispatches",
+            data=json.dumps({"ref": os.environ.get("GITHUB_REF_NAME", "main"), "inputs": {"new_only": "true"}}).encode(),
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": "garmin-growth",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=5) as res:
+            return res.status == 204
+    except Exception:
+        return False
