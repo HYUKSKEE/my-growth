@@ -92,3 +92,21 @@ src/components/DashboardView.tsx    대시보드 레이아웃
 src/components/charts.tsx           Recharts 차트 (클라이언트)
 src/lib/metrics.ts                  성장 지표 계산 (CTL/ATL, 효율, 비교 등)
 ```
+
+## Claude 연결 (MCP 커넥터)
+
+각자 자기 Claude 구독(Pro/Max 등)으로 "오늘 어떤 훈련할까?" 같은 질문을 할 수 있습니다.
+이 앱이 원격 MCP 서버(`https://<앱 주소>/mcp`)가 되고, 인증은 Supabase Auth(OAuth 2.1)가 맡습니다.
+조회 전용이며 본인과 수락된 친구의 데이터만 읽힙니다(기존 RLS 그대로).
+
+### 관리자(앱 운영자) 1회 설정
+1. Supabase → **Authentication → OAuth Server**: *Enable OAuth 2.1 server* 켜기
+2. 같은 화면의 **Authorization Path** 를 `/oauth/consent` 로 설정 (Site URL 은 배포 주소여야 함)
+3. 같은 화면에서 **Allow Dynamic OAuth Apps**(동적 클라이언트 등록) 켜기 — Claude 가 스스로 등록합니다
+4. (권장) 비대칭 JWT 서명 키 사용 — 이 프로젝트는 이미 ES256
+
+### 사용자 설정 (claude.ai, 유료 플랜)
+Settings → Connectors → **Add custom connector** → URL 에 `https://<앱 주소>/mcp` 입력 → 앱 계정으로 로그인 후 **허용**.
+연결 후 대화에서 "내 가민 데이터로 오늘 훈련 추천해줘", "경묵이 최근 컨디션 어때?" 처럼 물으면 됩니다.
+
+제공 도구: `list_people`, `get_overview`, `get_daily_metrics`, `list_activities`

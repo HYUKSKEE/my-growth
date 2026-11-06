@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { safeNext } from "@/lib/safe-next";
 
 export async function signIn(_prev: string | null, formData: FormData): Promise<string | null> {
   const supabase = await createClient();
@@ -10,7 +11,7 @@ export async function signIn(_prev: string | null, formData: FormData): Promise<
     password: String(formData.get("password") ?? ""),
   });
   if (error) return "이메일 또는 비밀번호가 올바르지 않습니다.";
-  redirect("/");
+  redirect(safeNext(formData.get("next")));
 }
 
 export async function signUp(_prev: string | null, formData: FormData): Promise<string | null> {
@@ -26,7 +27,7 @@ export async function signUp(_prev: string | null, formData: FormData): Promise<
   if (error) return `가입에 실패했습니다: ${error.message}`;
   // 이메일 확인이 켜져 있으면 세션이 아직 없음
   if (!data.session) return "확인 메일을 보냈습니다. 메일의 링크를 누른 뒤 로그인하세요.";
-  redirect("/");
+  redirect(safeNext(formData.get("next")));
 }
 
 export async function signOut() {
