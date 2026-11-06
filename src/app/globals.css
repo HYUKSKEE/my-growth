@@ -91,5 +91,13 @@ body {
     padding: 0.5rem 0.75rem;
     font-weight: 500;
   }
-  .btn:disabled { opacity: 0.6; }
+  .btn:hover:not(:disabled) { filter: brightness(1.08); }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .link-btn { color: var(--text-secondary); font-size: 0.875rem; }
+  .link-btn:hover:not(:disabled) { text-decoration: underline; }
+  .link-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .input:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn, .link-btn, .input, a, summary { outline-offset: 2px; }
+  :is(.btn, .link-btn, a, button):focus-visible,
+  .input:focus-visible { outline: 2px solid var(--series-1); }
 }

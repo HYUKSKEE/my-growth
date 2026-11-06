@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardView, RANGES, type RangeKey } from "@/components/DashboardView";
+import { Skeleton } from "@/components/ui";
 import { type ActivityRow, type DailyRow, addDays } from "@/lib/metrics";
 
 const DAILY_COLS = "date,steps,resting_hr,hrv_last_night,vo2max_run,sleep_score,sleep_seconds,body_battery_max";
@@ -28,9 +29,23 @@ function todayInTz() {
 
 export default function Page({ searchParams }: PageProps<"/">) {
   return (
-    <Suspense fallback={<main className="mx-auto w-full max-w-6xl px-4 py-6 text-sm text-muted">불러오는 중…</main>}>
+    <Suspense fallback={<DashboardSkeleton />}>
       <Dashboard searchParams={searchParams} />
     </Suspense>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6" aria-busy aria-label="불러오는 중">
+      <Skeleton className="h-9 w-56" />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        {Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-64 rounded-xl" />)}
+      </div>
+    </main>
   );
 }
 

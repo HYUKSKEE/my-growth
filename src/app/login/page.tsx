@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { SubmitButton } from "@/components/ui";
 import { signIn, signUp } from "./actions";
 
 export default function LoginPage() {
@@ -33,12 +34,12 @@ export default function LoginPage() {
           <input name="password" type="password" required minLength={up ? 8 : undefined}
             autoComplete={up ? "new-password" : "current-password"} className="input" />
         </label>
-        {error && <p className="text-sm text-critical">{error}</p>}
-        <button disabled={pending} className="btn w-full">
-          {pending ? "처리 중…" : up ? "가입하기" : "로그인"}
-        </button>
-        <button type="button" onClick={() => setMode(up ? "in" : "up")}
-          className="w-full text-center text-sm text-secondary hover:underline">
+        {error && <p role="alert" className="text-sm text-critical">{error}</p>}
+        <SubmitButton pending={pending} pendingLabel={up ? "가입 중…" : "로그인 중…"} className="w-full">
+          {up ? "가입하기" : "로그인"}
+        </SubmitButton>
+        <button type="button" disabled={pending} onClick={() => setMode(up ? "in" : "up")}
+          className="link-btn w-full text-center">
           {up ? "이미 계정이 있나요? 로그인" : "계정이 없나요? 가입하기"}
         </button>
       </form>

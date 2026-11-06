@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { signOut } from "@/app/login/actions";
 import { StatTile } from "@/components/StatTile";
+import { InfoTip, PendingLink, SubmitButton } from "@/components/ui";
 import { EfficiencyChart, FitnessChart, TrendChart, WeeklyVolumeChart } from "@/components/charts";
 import {
   type ActivityRow, type DailyRow, addDays, compareWindows, dailyTrend, fitnessFatigue, fmtDuration,
@@ -53,30 +53,46 @@ export function DashboardView({ daily, acts, today, rangeKey, email, sync, peopl
           <p className="text-sm text-muted">
             {isSelf ? email : "친구 대시보드 (읽기 전용)"} · 마지막 동기화{" "}
             {sync?.last_run_at ? new Date(sync.last_run_at).toLocaleString("ko-KR") : "없음"}
-            {sync?.last_error && <span className="text-critical"> · 오류: {sync.last_error}</span>}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <nav className="card flex p-1 text-sm" aria-label="기간">
             {(Object.keys(RANGES) as RangeKey[]).map((k) => (
-              <Link key={k} href={q(k)}
-                className={`rounded-md px-3 py-1 ${k === rangeKey ? "bg-background font-medium" : "text-secondary"}`}>
+              <PendingLink key={k} href={q(k)} aria-current={k === rangeKey ? "page" : undefined}
+                title={`최근 ${k === "365" ? "1년" : `${Number(k) / 30}개월`} 보기`}
+                className={`rounded-md px-3 py-1 ${k === rangeKey ? "bg-background font-medium" : "text-secondary hover:text-primary"}`}>
                 {k === "365" ? "1년" : `${Number(k) / 30}개월`}
-              </Link>
+              </PendingLink>
             ))}
           </nav>
-          <Link href="/friends" className="text-sm text-secondary hover:underline">친구</Link>
-          <form action={signOut}><button className="text-sm text-secondary hover:underline">로그아웃</button></form>
+          <PendingLink href="/friends" className="text-sm text-secondary hover:underline" title="친구 추가 · 가민 연결">친구</PendingLink>
+          <form action={signOut}><SubmitButton variant="link" pendingLabel="로그아웃 중…">로그아웃</SubmitButton></form>
         </div>
       </header>
+
+      {sync?.last_error && (
+        <section role="alert" className="card space-y-1 border-critical p-4 text-sm">
+          <h2 className="font-semibold text-critical">동기화에 실패했습니다</h2>
+          <p className="break-words text-secondary">{sync.last_error}</p>
+          {isSelf ? (
+            <p className="text-muted">
+              로그인 정보가 바뀌었다면 <PendingLink href="/friends" className="underline">친구 페이지</PendingLink>에서 가민을 다시 연결하세요. 그 밖의 경우 다음 동기화 때 자동으로 다시 시도합니다.
+            </p>
+          ) : (
+            <p className="text-muted">친구의 가민 연결에 문제가 있어 최신 데이터가 아닐 수 있습니다.</p>
+          )}
+        </section>
+      )}
 
       {people.length > 1 && (
         <nav className="flex flex-wrap gap-2 text-sm" aria-label="사용자">
           {people.map((p) => (
-            <Link key={p.id} href={`/?range=${rangeKey}${p.id === people[0].id ? "" : `&user=${p.id}`}`}
-              className={`card rounded-full px-3 py-1 ${p.id === viewingId ? "font-medium" : "text-secondary"}`}>
+            <PendingLink key={p.id} href={`/?range=${rangeKey}${p.id === people[0].id ? "" : `&user=${p.id}`}`}
+              aria-current={p.id === viewingId ? "page" : undefined}
+              title={p.id === people[0].id ? "내 대시보드" : `${p.name}님의 대시보드 (읽기 전용)`}
+              className={`card rounded-full px-3 py-1 ${p.id === viewingId ? "font-medium" : "text-secondary hover:text-primary"}`}>
               {p.id === people[0].id ? "나" : p.name}
-            </Link>
+            </PendingLink>
           ))}
         </nav>
       )}
@@ -87,7 +103,7 @@ export function DashboardView({ daily, acts, today, rangeKey, email, sync, peopl
           {isSelf ? (
             <>
               <p className="text-secondary">가민 계정을 연결하면 데이터가 자동으로 채워집니다.</p>
-              <Link href="/friends" className="btn inline-block">가민 연결하기</Link>
+              <PendingLink href="/friends" className="btn inline-block">가민 연결하기</PendingLink>
             </>
           ) : (
             <p className="text-secondary">이 친구는 아직 가민을 연결하지 않았거나 첫 동기화 전입니다.</p>
@@ -96,14 +112,14 @@ export function DashboardView({ daily, acts, today, rangeKey, email, sync, peopl
       ) : (
         <>
           <section>
-            <h2 className="mb-2 text-sm font-medium text-secondary">최근 28일 vs 이전 28일</h2>
+            <h2 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-secondary">최근 28일 vs 이전 28일 <InfoTip text="최근 28일 평균과 그 직전 28일 평균을 비교합니다. 화살표 옆 수치가 변화량입니다." /></h2>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-              <StatTile label="VO2 Max (러닝)" value={kpi.vo2.current} delta={kpi.vo2.delta} digits={1} />
-              <StatTile label="안정시 심박" value={kpi.rhr.current} delta={kpi.rhr.delta} unit="bpm" lowerIsBetter />
-              <StatTile label="수면 중 HRV" value={kpi.hrv.current} delta={kpi.hrv.delta} unit="ms" />
-              <StatTile label="러닝 효율" value={kpi.eff.current} delta={kpi.eff.delta} unit=" m/b" digits={2} hint="심박 1회당 이동거리" />
-              <StatTile label="주간 러닝 거리" value={kpi.km.current} delta={kpi.km.delta} unit="km" digits={1} />
-              <StatTile label="수면 점수" value={kpi.sleep.current} delta={kpi.sleep.delta} />
+              <StatTile label="VO2 Max (러닝)" info="1분당 몸이 쓸 수 있는 최대 산소량. 높을수록 유산소 능력이 좋습니다." value={kpi.vo2.current} delta={kpi.vo2.delta} digits={1} />
+              <StatTile label="안정시 심박" info="쉬고 있을 때의 심박수. 낮아질수록 심폐 기능이 좋아진 것입니다." value={kpi.rhr.current} delta={kpi.rhr.delta} unit="bpm" lowerIsBetter />
+              <StatTile label="수면 중 HRV" info="심박 간격의 변동성. 높을수록 회복이 잘 된 상태입니다." value={kpi.hrv.current} delta={kpi.hrv.delta} unit="ms" />
+              <StatTile label="러닝 효율" info="같은 심박으로 얼마나 멀리 달렸는지(m/박동). 클수록 효율적입니다." value={kpi.eff.current} delta={kpi.eff.delta} unit=" m/b" digits={2} hint="심박 1회당 이동거리" />
+              <StatTile label="주간 러닝 거리" info="완료된 주 기준 최근 4주 평균과 그 이전 4주 평균의 비교입니다." value={kpi.km.current} delta={kpi.km.delta} unit="km" digits={1} />
+              <StatTile label="수면 점수" info="가민이 수면 시간·단계·방해 요소로 계산한 0~100점 점수입니다." value={kpi.sleep.current} delta={kpi.sleep.delta} />
             </div>
           </section>
 
